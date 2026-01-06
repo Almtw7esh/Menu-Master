@@ -50,6 +50,7 @@ export default function Menu() {
   const [price, setPrice] = useState('');
   const [category, setCategory] = useState('');
   const [image, setImage] = useState('');
+    const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [filterRestaurant, setFilterRestaurant] = useState<string>('all');
   const [filterBranch, setFilterBranch] = useState<string>('all');
@@ -97,19 +98,27 @@ export default function Menu() {
     try {
       console.log('Saving menu item with image:', image);
       const itemData = {
-        restaurantId: selectedRestaurant,
-        branchId: selectedBranch,
+        restaurant_id: selectedRestaurant,
+        branch_id: selectedBranch,
         name,
         price: parseFloat(price),
         category,
         ...(image && { image }),
+          ...(description && { description }),
       };
 
       if (editingItem) {
-        await updateDoc(doc(db, 'menuItems', editingItem.id), itemData);
+        const { error } = await supabase
+          .from('menu_items')
+          .update(itemData)
+          .eq('id', editingItem.id);
+        if (error) throw error;
         toast.success('Menu item updated successfully');
       } else {
-        await addDoc(collection(db, 'menuItems'), { ...itemData, createdAt: Timestamp.now() });
+        const { error } = await supabase
+          .from('menu_items')
+          .insert([{ ...itemData }]);
+        if (error) throw error;
         toast.success('Menu item added successfully');
       }
 
@@ -125,19 +134,21 @@ export default function Menu() {
 
   const handleEdit = (item: MenuItem) => {
     setEditingItem(item);
-    setSelectedRestaurant(item.restaurantId);
-    setSelectedBranch(item.branchId);
+    setSelectedRestaurant(item.restaurant_id);
+    setSelectedBranch(item.branch_id);
     setName(item.name);
     setPrice(item.price.toString());
     setCategory(item.category);
     setImage(item.image || '');
+      setDescription(item.description || '');
     setDialogOpen(true);
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this item?')) return;
     try {
-      await deleteDoc(doc(db, 'menuItems', id));
+      const { error } = await supabase.from('menu_items').delete().eq('id', id);
+      if (error) throw error;
       toast.success('Item deleted successfully');
       fetchData();
     } catch (error) {
@@ -160,12 +171,12 @@ export default function Menu() {
   const getRestaurantName = (id: string) => restaurants.find((r) => r.id === id)?.name || 'Unknown';
   const getBranchName = (id: string) => branches.find((b) => b.id === id)?.name || 'Unknown';
 
-  const filteredBranchesForForm = branches.filter((b) => b.restaurantId === selectedRestaurant);
-  const filteredBranchesForFilter = filterRestaurant === 'all' ? branches : branches.filter((b) => b.restaurantId === filterRestaurant);
+  const filteredBranchesForForm = branches.filter((b) => b.restaurant_id === selectedRestaurant);
+  const filteredBranchesForFilter = filterRestaurant === 'all' ? branches : branches.filter((b) => b.restaurant_id === filterRestaurant);
 
   const filteredItems = menuItems.filter((item) => {
-    if (filterRestaurant !== 'all' && item.restaurantId !== filterRestaurant) return false;
-    if (filterBranch !== 'all' && item.branchId !== filterBranch) return false;
+    if (filterRestaurant !== 'all' && item.restaurant_id !== filterRestaurant) return false;
+    if (filterBranch !== 'all' && item.branch_id !== filterBranch) return false;
     if (filterCategory !== 'all' && item.category !== filterCategory) return false;
     if (searchQuery && !item.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
@@ -173,8 +184,8 @@ export default function Menu() {
 
   // Group by restaurant > branch > category
   const groupedItems = filteredItems.reduce((acc, item) => {
-    const restaurantId = item.restaurantId;
-    const branchId = item.branchId;
+    const restaurantId = item.restaurant_id;
+    const branchId = item.branch_id;
     if (!acc[restaurantId]) acc[restaurantId] = {};
     if (!acc[restaurantId][branchId]) acc[restaurantId][branchId] = [];
     acc[restaurantId][branchId].push(item);
@@ -256,6 +267,15 @@ export default function Menu() {
                 onChange={setImage}
                 label="Item Image (Recommended)"
               />
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Description</label>
+                  <textarea
+                    value={description}
+                    onChange={e => setDescription(e.target.value)}
+                    placeholder="e.g., Fresh and delicious, made with premium ingredients"
+                    className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
 
               <div className="flex gap-3 pt-2">
                 <Button type="button" variant="outline" className="flex-1" onClick={resetForm}>Cancel</Button>

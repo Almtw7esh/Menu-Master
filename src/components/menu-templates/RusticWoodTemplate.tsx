@@ -1,3 +1,9 @@
+// Helper to get the full Supabase image URL if needed
+function getMenuItemImageUrl(image: string) {
+  if (!image) return '';
+  if (image.startsWith('http://') || image.startsWith('https://')) return image;
+  return `https://qwwhlsqwcpjygpmbxjxd.supabase.co/storage/v1/object/public/images/${image}`;
+}
 import { Restaurant, Branch, MenuItem } from '@/types';
 import { UtensilsCrossed, MapPin, Truck } from 'lucide-react';
 
@@ -46,43 +52,58 @@ export function RusticWoodTemplate({ restaurant, branch, categorizedItems, sorte
 
       {/* Menu Content */}
       <div className="p-6 md:p-10">
-        {sortedCategories.map((category) => (
-          <div key={category} className="mb-10">
-            {/* Category Header */}
-            <div className="bg-gradient-to-r from-red-800 to-red-700 py-3 px-6 rounded-t-lg mb-6">
-              <h2 className="text-xl font-bold text-yellow-400 text-center tracking-wider">
-                {category}
-              </h2>
-            </div>
+        {sortedCategories.map((category) => {
+          const catKey = String(category);
+          console.log('RusticWoodTemplate category:', category, 'typeof:', typeof category);
+          return (
+            <div key={catKey} className="mb-10">
+              {/* Category Header */}
+              <div className="bg-gradient-to-r from-red-800 to-red-700 py-3 px-6 rounded-t-lg mb-6">
+                <h2 className="text-xl font-bold text-yellow-400 text-center tracking-wider">
+                  {category}
+                </h2>
+              </div>
 
-            {/* Items Grid - 2 columns */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-              {categorizedItems[category].map((item) => (
-                <div key={item.id} className="flex gap-4 items-start">
-                  {/* Item Details */}
-                  <div className="flex-1">
-                    <div className="flex items-baseline gap-3 mb-1">
-                      <h3 className="text-lg font-bold text-white drop-shadow-lg">
-                        {item.name}
-                      </h3>
-                      <span className="text-xl font-bold text-yellow-400">
-                        {item.price.toLocaleString()} IQD
-                      </span>
+              {/* Items Grid - 2 columns */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                {categorizedItems[catKey]?.map((item) => {
+                  console.log('RusticWoodTemplate item.id:', item.id, 'typeof:', typeof item.id);
+                  return (
+                    <div key={String(item.id)} className="flex gap-4 items-start">
+                      {/* Item Details */}
+                      <div className="flex-1">
+                        <div className="flex items-baseline gap-3 mb-1">
+                          <h3 className="text-lg font-bold text-white drop-shadow-lg">
+                            {item.name}
+                          </h3>
+                          <span className="text-xl font-bold text-yellow-400">
+                            {item.price.toLocaleString()} IQD
+                          </span>
+                        </div>
+                        <p className="text-sm text-black opacity-90 leading-relaxed">
+                          {item.description || `Delicious ${item.name.toLowerCase()} prepared with fresh ingredients`}
+                        </p>
+                      </div>
+                      {/* Circular Image Placeholder */}
+                        <div className="h-16 w-16 rounded-lg bg-white/80 flex items-center justify-center overflow-hidden">
+                          {item.image ? (
+                            <img
+                              src={getMenuItemImageUrl(item.image)}
+                              alt={item.name}
+                              className="h-16 w-16 rounded-lg object-cover border border-border"
+                              onError={e => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}
+                            />
+                          ) : (
+                            <UtensilsCrossed className="h-7 w-7 text-amber-700" />
+                          )}
+                      </div>
                     </div>
-                    <p className="text-sm text-gray-200 opacity-90 leading-relaxed">
-                      Delicious {item.name.toLowerCase()} prepared with fresh ingredients
-                    </p>
-                  </div>
-                  
-                  {/* Circular Image Placeholder */}
-                  <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-white/10 backdrop-blur-sm border-2 border-white/30 flex items-center justify-center flex-shrink-0 shadow-xl">
-                    <UtensilsCrossed className="h-8 w-8 text-white/70" />
-                  </div>
-                </div>
-              ))}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {/* Footer Info */}
         <div className="mt-8 pt-6 border-t border-white/20 flex flex-wrap justify-center gap-6 text-white/80 text-sm">
@@ -92,7 +113,7 @@ export function RusticWoodTemplate({ restaurant, branch, categorizedItems, sorte
           </div>
           <div className="flex items-center gap-2">
             <Truck className="h-4 w-4" />
-            <span>Delivery: {branch?.deliveryPrice?.toLocaleString()} IQD</span>
+            <span>Delivery: {branch?.delivery_price?.toLocaleString()} IQD</span>
           </div>
         </div>
       </div>

@@ -1,3 +1,9 @@
+// Helper to get the full Supabase image URL if needed
+function getMenuItemImageUrl(image: string) {
+  if (!image) return '';
+  if (image.startsWith('http://') || image.startsWith('https://')) return image;
+  return `https://qwwhlsqwcpjygpmbxjxd.supabase.co/storage/v1/object/public/images/${image}`;
+}
 import { Restaurant, Branch, MenuItem } from '@/types';
 import { UtensilsCrossed, MapPin, Truck, Pizza, Coffee, Cookie } from 'lucide-react';
 
@@ -65,9 +71,11 @@ export function FastFoodDarkTemplate({ restaurant, branch, categorizedItems, sor
       <div className="px-6 md:px-10 pb-10">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {sortedCategories.map((category) => {
+            const catKey = String(category);
             const CategoryIcon = getCategoryIcon(category);
+            console.log('FastFoodDarkTemplate category:', category, 'typeof:', typeof category);
             return (
-              <div key={category} className="relative">
+              <div key={catKey} className="relative">
                 {/* Category Header with brush stroke */}
                 <div className="mb-6 relative">
                   <div className="absolute inset-0 bg-orange-500 transform -skew-x-2 rounded" 
@@ -80,21 +88,40 @@ export function FastFoodDarkTemplate({ restaurant, branch, categorizedItems, sor
 
                 {/* Items */}
                 <div className="space-y-5">
-                  {categorizedItems[category].map((item) => (
-                    <div key={item.id} className="group">
-                      <div className="flex justify-between items-start mb-1">
-                        <h4 className="text-white font-semibold group-hover:text-orange-400 transition-colors">
-                          {item.name}
-                        </h4>
-                        <span className="text-orange-400 font-bold ml-2">
-                          {item.price.toLocaleString()} IQD
-                        </span>
+                  {categorizedItems[catKey]?.map((item) => {
+                    console.log('FastFoodDarkTemplate item.id:', item.id, 'typeof:', typeof item.id);
+                    return (
+                      <div key={String(item.id)} className="group">
+                        <div className="flex items-center gap-4 mb-2">
+                          {item.image ? (
+                            <img
+                              src={getMenuItemImageUrl(item.image)}
+                              alt={item.name}
+                              className="h-16 w-16 rounded-lg object-cover border border-border"
+                              onError={e => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}
+                            />
+                          ) : (
+                            <div className="h-16 w-16 rounded-lg bg-zinc-800 flex items-center justify-center">
+                              <UtensilsCrossed className="h-7 w-7 text-orange-400/60" />
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            <div className="flex justify-between items-start mb-1">
+                              <h4 className="text-white font-semibold group-hover:text-orange-400 transition-colors">
+                                {item.name}
+                              </h4>
+                              <span className="text-orange-400 font-bold ml-2">
+                                {item.price.toLocaleString()} IQD
+                              </span>
+                            </div>
+                            <p className="text-zinc-500 text-sm leading-relaxed">
+                              {item.description || 'Fresh and delicious, made with premium ingredients'}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                      <p className="text-zinc-500 text-sm leading-relaxed">
-                        Fresh and delicious, made with premium ingredients
-                      </p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* Decorative food illustration placeholder */}
@@ -116,7 +143,7 @@ export function FastFoodDarkTemplate({ restaurant, branch, categorizedItems, sor
           </div>
           <div className="flex items-center gap-2">
             <Truck className="h-4 w-4 text-orange-400" />
-            <span>Delivery: {branch?.deliveryPrice?.toLocaleString()} IQD</span>
+            <span>Delivery: {branch?.delivery_price?.toLocaleString()} IQD</span>
           </div>
         </div>
       </div>

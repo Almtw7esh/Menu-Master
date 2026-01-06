@@ -7,7 +7,11 @@ import { supabase } from './supabaseClient';
  * @returns Promise<string> Public URL of uploaded image
  */
 export async function uploadImageToSupabase(file: File, folder: string = 'images'): Promise<string> {
-  const fileName = `${Date.now()}_${file.name}`;
+  // Sanitize file name: keep only ASCII letters, numbers, dots, dashes, and underscores
+  const originalName = file.name;
+  const sanitizedBase = originalName
+    .replace(/[^a-zA-Z0-9._-]/g, '_');
+  const fileName = `${Date.now()}_${sanitizedBase}`;
   const { data, error } = await supabase.storage.from(folder).upload(fileName, file);
   if (error) throw error;
 

@@ -1,30 +1,35 @@
+
 export interface Restaurant {
   id: string;
   name: string;
   logo?: string;
-  createdAt: Date;
+  created_at: Date;
 }
 
 export interface Branch {
   id: string;
-  restaurantId: string;
+  restaurant_id: string;
   name: string;
   state: string;
   location: string;
-  deliveryPrice: number;
+  delivery_price: number;
+  whatsapp?: string;
+  active_template?: string;
   image?: string;
-  createdAt: Date;
+  template_settings?: Record<string, any>;
+  created_at: Date;
 }
 
 export interface MenuItem {
   id: string;
-  branchId: string;
-  restaurantId: string;
+  branch_id: string;
+  restaurant_id: string;
   name: string;
   price: number;
   category: string;
   image?: string;
-  createdAt: Date;
+  description?: string;
+  created_at: Date;
 }
 
 export interface Category {

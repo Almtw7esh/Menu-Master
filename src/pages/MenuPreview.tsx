@@ -1,4 +1,34 @@
+// Utility to deeply normalize id and category to string
+function normalizeToString(val: any): string {
+  if (val == null) return '';
+  if (typeof val === 'string' || typeof val === 'number') return String(val);
+  if (typeof val === 'object') {
+    if (val.toString && val.toString !== Object.prototype.toString) {
+      try {
+        const str = val.toString();
+        if (str !== '[object Object]') return str;
+      } catch {}
+    }
+    try {
+      return JSON.stringify(val);
+    } catch {
+      return '[object Object]';
+    }
+  }
+  return String(val);
+}
 import { useState, useEffect } from 'react';
+// Utility to slugify names for URLs
+function slugify(text: string) {
+  return text
+    .toString()
+    .normalize('NFKD')
+    .replace(/[^\p{L}\p{N}\s-]/gu, '') // Allow all Unicode letters/numbers
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .toLowerCase();
+}
 import { supabase } from '@/lib/supabaseClient';
 import { Restaurant, Branch, MenuItem } from '@/types';
 import { UtensilsCrossed, MapPin, Truck, Palette, TreePine, Sparkles, Zap, Star } from 'lucide-react';
@@ -11,6 +41,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -23,6 +54,7 @@ import { RusticWoodTemplate } from '@/components/menu-templates/RusticWoodTempla
 import { ElegantMinimalTemplate } from '@/components/menu-templates/ElegantMinimalTemplate';
 import { FastFoodDarkTemplate } from '@/components/menu-templates/FastFoodDarkTemplate';
 import { PlayfulCreamTemplate } from '@/components/menu-templates/PlayfulCreamTemplate';
+import HelloChickenTemplate from '@/components/menu-templates/HelloChickenTemplate';
 
 const CATEGORIES = [
   'Appetizers',
@@ -39,7 +71,7 @@ const CATEGORIES = [
   'Breakfast',
 ];
 
-export type TemplateType = 'default' | 'rustic-wood' | 'elegant-minimal' | 'fast-food-dark' | 'playful-cream';
+export type TemplateType = 'default' | 'rustic-wood' | 'elegant-minimal' | 'fast-food-dark' | 'playful-cream' | 'hello-chicken';
 
 const TEMPLATES: { id: TemplateType; name: string; description: string; icon: React.ElementType; previewBg: string }[] = [
   { id: 'default', name: 'Default', description: 'Clean modern layout', icon: Palette, previewBg: 'bg-gradient-to-br from-primary/20 to-secondary/30' },
@@ -47,6 +79,7 @@ const TEMPLATES: { id: TemplateType; name: string; description: string; icon: Re
   { id: 'elegant-minimal', name: 'Elegant Minimal', description: 'Clean cream with serif fonts', icon: Sparkles, previewBg: 'bg-gradient-to-br from-stone-100 to-stone-200' },
   { id: 'fast-food-dark', name: 'Fast Food Dark', description: 'Dark theme with orange accents', icon: Zap, previewBg: 'bg-gradient-to-br from-zinc-900 to-orange-900' },
   { id: 'playful-cream', name: 'Playful Cream', description: 'Colorful and fun design', icon: Star, previewBg: 'bg-gradient-to-br from-amber-100 to-orange-100' },
+  { id: 'hello-chicken', name: 'Hello Chicken', description: 'Red bold style, Arabic friendly', icon: UtensilsCrossed, previewBg: 'bg-gradient-to-br from-red-700 to-yellow-200' },
 ];
 
 export default function MenuPreview() {
@@ -58,6 +91,29 @@ export default function MenuPreview() {
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateType>('default');
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [publicMenuUrl, setPublicMenuUrl] = useState<string | null>(null);
+
+  // Save selected template for the branch
+  const handleApplyTemplate = async () => {
+    if (!selectedBranch || !selectedTemplate) {
+      toast.error('Please select a branch and template');
+      return;
+    }
+    const { error } = await supabase
+      .from('branches')
+      .update({ active_template: selectedTemplate })
+      .eq('id', selectedBranch);
+    if (error) {
+      toast.error('Failed to apply template');
+    } else {
+      toast.success('Template applied! This branch menu is now public.');
+      const domain = window.location.origin;
+      const restaurantSlug = selectedRestaurantData?.name ? slugify(selectedRestaurantData.name) : 'restaurant';
+      const branchSlug = selectedBranchData?.name ? slugify(selectedBranchData.name) : 'branch';
+      const templateUuid = selectedTemplate;
+      setPublicMenuUrl(`${domain}/${restaurantSlug}/${branchSlug}/${templateUuid}`);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -80,7 +136,14 @@ export default function MenuPreview() {
       if (restaurantsError || branchesError || menuItemsError) throw restaurantsError || branchesError || menuItemsError;
       setRestaurants(restaurantsData || []);
       setBranches(branchesData || []);
-      setMenuItems(menuItemsData || []);
+      // Defensive normalization: ensure id and category are always strings
+      console.log('RAW menuItemsData from Supabase:', menuItemsData);
+      const normalizedMenuItems = (menuItemsData || []).map(item => ({
+        ...item,
+        id: normalizeToString(item.id),
+        category: normalizeToString(item.category),
+      }));
+      setMenuItems(normalizedMenuItems);
     } catch (error) {
       console.error(error);
       toast.error('Failed to fetch data');
@@ -89,46 +152,64 @@ export default function MenuPreview() {
     }
   };
 
-  const filteredBranches = branches.filter((b) => b.restaurantId === selectedRestaurant);
+  const filteredBranches = branches.filter((b) => b.restaurant_id === selectedRestaurant);
   const selectedBranchData = branches.find((b) => b.id === selectedBranch);
   const selectedRestaurantData = restaurants.find((r) => r.id === selectedRestaurant);
 
   const filteredItems = menuItems.filter((item) => {
-    if (selectedRestaurant && item.restaurantId !== selectedRestaurant) return false;
-    if (selectedBranch && item.branchId !== selectedBranch) return false;
+    if (selectedRestaurant && item.restaurant_id !== selectedRestaurant) return false;
+    if (selectedBranch && item.branch_id !== selectedBranch) return false;
     return true;
   });
 
-  // Group items by category
+  // Group items by category (always use string keys)
   const categorizedItems = filteredItems.reduce((acc, item) => {
-    if (!acc[item.category]) acc[item.category] = [];
-    acc[item.category].push(item);
+    const catKey = String(item.category);
+    if (!acc[catKey]) acc[catKey] = [];
+    acc[catKey].push(item);
     return acc;
   }, {} as Record<string, MenuItem[]>);
 
-  // Sort categories by predefined order
-  const sortedCategories = CATEGORIES.filter((cat) => categorizedItems[cat]);
+  // Sort categories by predefined order (always use string keys)
+  const sortedCategories = CATEGORIES.filter((cat) => categorizedItems[String(cat)]);
+
+  const templateComponents: Record<string, any> = {
+    'rustic-wood': RusticWoodTemplate,
+    'elegant-minimal': ElegantMinimalTemplate,
+    'fast-food-dark': FastFoodDarkTemplate,
+    'playful-cream': PlayfulCreamTemplate,
+    'hello-chicken': HelloChickenTemplate,
+  };
 
   const renderTemplate = () => {
+    // For HelloChickenTemplate, convert categorizedItems/sortedCategories to menuSections
+    if (selectedTemplate === 'hello-chicken') {
+      const menuSections = sortedCategories.map((cat) => ({
+        title: String(cat),
+        items: categorizedItems[String(cat)] || [],
+      }));
+      return (
+        <HelloChickenTemplate
+          restaurantName={selectedRestaurantData?.name || ''}
+          branchName={selectedBranchData?.name || ''}
+          menuSections={menuSections}
+          primaryColor={selectedBranchData?.template_settings?.primaryColor}
+          accentColor={selectedBranchData?.template_settings?.accentColor}
+          logoUrl={selectedRestaurantData?.logo}
+        />
+      );
+    }
     const templateProps = {
       restaurant: selectedRestaurantData,
       branch: selectedBranchData,
       categorizedItems,
       sortedCategories,
     };
-
-    switch (selectedTemplate) {
-      case 'rustic-wood':
-        return <RusticWoodTemplate {...templateProps} />;
-      case 'elegant-minimal':
-        return <ElegantMinimalTemplate {...templateProps} />;
-      case 'fast-food-dark':
-        return <FastFoodDarkTemplate {...templateProps} />;
-      case 'playful-cream':
-        return <PlayfulCreamTemplate {...templateProps} />;
-      default:
-        return renderDefaultTemplate();
+    if (selectedTemplate in templateComponents) {
+      const TemplateComponent = templateComponents[selectedTemplate];
+      return <TemplateComponent {...templateProps} />;
     }
+    return renderDefaultTemplate();
   };
 
   const renderDefaultTemplate = () => (
@@ -150,7 +231,7 @@ export default function MenuPreview() {
               </div>
               <div className="flex items-center gap-2">
                 <Truck className="h-4 w-4" />
-                <span>Delivery: {selectedBranchData?.deliveryPrice?.toLocaleString()} IQD</span>
+                <span>Delivery: {selectedBranchData?.delivery_price?.toLocaleString()} IQD</span>
               </div>
             </div>
           </div>
@@ -159,34 +240,37 @@ export default function MenuPreview() {
 
       {/* Menu Categories */}
       {sortedCategories.length > 0 ? (
-        sortedCategories.map((category) => (
-          <Card key={category} className="shadow-card">
-            <CardHeader className="border-b border-border">
-              <CardTitle className="text-xl text-primary">{category}</CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {categorizedItems[category].map((item, index) => (
-                  <div
-                    key={item.id}
-                    className="flex justify-between items-center p-4 rounded-xl bg-secondary/30 border border-border hover:border-primary/30 transition-all animate-fade-in"
-                    style={{ animationDelay: `${index * 0.05}s` }}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
-                        <UtensilsCrossed className="h-5 w-5 text-muted-foreground" />
+        sortedCategories.map((category) => {
+          const catKey = String(category);
+          return (
+            <Card key={catKey} className="shadow-card">
+              <CardHeader className="border-b border-border">
+                <CardTitle className="text-xl text-primary">{category}</CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {categorizedItems[catKey]?.map((item, index) => (
+                    <div
+                      key={String(item.id)}
+                      className="flex justify-between items-center p-4 rounded-xl bg-secondary/30 border border-border hover:border-primary/30 transition-all animate-fade-in"
+                      style={{ animationDelay: `${index * 0.05}s` }}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                          <UtensilsCrossed className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                        <span className="font-medium text-foreground">{item.name}</span>
                       </div>
-                      <span className="font-medium text-foreground">{item.name}</span>
+                      <span className="text-lg font-bold text-primary whitespace-nowrap">
+                        {item.price.toLocaleString()} IQD
+                      </span>
                     </div>
-                    <span className="text-lg font-bold text-primary whitespace-nowrap">
-                      {item.price.toLocaleString()} IQD
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ))
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })
       ) : (
         <Card className="shadow-card">
           <CardContent className="flex flex-col items-center justify-center py-16">
@@ -237,7 +321,7 @@ export default function MenuPreview() {
                 </SelectTrigger>
                 <SelectContent>
                   {restaurants.map((r) => (
-                    <SelectItem key={r.id} value={r.id}>
+                    <SelectItem key={String(r.id)} value={String(r.id)}>
                       {r.name}
                     </SelectItem>
                   ))}
@@ -255,11 +339,39 @@ export default function MenuPreview() {
                   <SelectValue placeholder={selectedRestaurant ? "Select a branch" : "Select restaurant first"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {filteredBranches.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name} - {b.state}
-                    </SelectItem>
-                  ))}
+                  {filteredBranches.map((b) => {
+                    let publicUrl = '';
+                    if (b.active_template && b.name && selectedRestaurantData?.name) {
+                      const slugify = (text: string) => text.toString().normalize('NFKD').replace(/[\u0300-\u036F]/g, '').replace(/[^a-zA-Z0-9\s-]/g, '').trim().replace(/\s+/g, '-').replace(/-+/g, '-').toLowerCase();
+                      const domain = window.location.origin;
+                      const restaurantSlug = slugify(selectedRestaurantData.name);
+                      const branchSlug = slugify(b.name);
+                      publicUrl = `${domain}/${restaurantSlug}/${branchSlug}/${b.active_template}`;
+                    }
+                    return (
+                      <div key={String(b.id)} className="px-2 py-1">
+                        <SelectItem value={String(b.id)} className="flex flex-col items-start">
+                          <span className="flex items-center gap-2">
+                            {b.name} - {b.state}
+                            {b.active_template && (
+                              <Badge variant="default" className="ml-2 bg-green-100 text-green-700 border-green-200">Published</Badge>
+                            )}
+                          </span>
+                          {b.active_template && publicUrl && (
+                            <a
+                              href={publicUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-primary underline break-all hover:text-orange-500 mt-1"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              {publicUrl}
+                            </a>
+                          )}
+                        </SelectItem>
+                      </div>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -280,24 +392,21 @@ export default function MenuPreview() {
                     {TEMPLATES.map((template) => {
                       const IconComponent = template.icon;
                       return (
-                        <button
-                          key={template.id}
-                          onClick={() => {
-                            setSelectedTemplate(template.id);
-                            setTemplateDialogOpen(false);
-                          }}
-                          className={`p-4 rounded-xl border-2 text-left transition-all hover:border-primary/50 hover:scale-105 ${
-                            selectedTemplate === template.id
-                              ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
-                              : 'border-border bg-secondary/30'
-                          }`}
-                        >
-                          <div className={`h-20 rounded-lg ${template.previewBg} mb-3 flex items-center justify-center`}>
-                            <IconComponent className="h-8 w-8 text-white drop-shadow-lg" />
-                          </div>
-                          <h4 className="font-medium text-foreground">{template.name}</h4>
-                          <p className="text-xs text-muted-foreground">{template.description}</p>
-                        </button>
+                        <div key={template.id} className="flex flex-col items-center gap-2 p-4 rounded-lg border border-border bg-background hover:bg-secondary/30 transition-all">
+                          <IconComponent className="h-8 w-8 mb-2" />
+                          <span className="font-semibold">{template.name}</span>
+                          <span className="text-xs text-muted-foreground mb-2">{template.description}</span>
+                          <Button
+                            variant={template.id === selectedTemplate ? 'default' : 'outline'}
+                            onClick={() => {
+                              setSelectedTemplate(template.id);
+                              setTemplateDialogOpen(false);
+                            }}
+                            className="w-full"
+                          >
+                            {template.id === selectedTemplate ? 'Selected' : 'Choose'}
+                          </Button>
+                        </div>
                       );
                     })}
                   </div>
@@ -308,20 +417,22 @@ export default function MenuPreview() {
         </CardContent>
       </Card>
 
-      {/* Menu Preview */}
-      {selectedRestaurant && selectedBranch ? (
-        renderTemplate()
-      ) : (
-        <Card className="shadow-card">
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <div className="h-16 w-16 rounded-2xl bg-secondary flex items-center justify-center mb-4">
-              <UtensilsCrossed className="h-8 w-8 text-secondary-foreground" />
-            </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">Select a restaurant and branch</h3>
-            <p className="text-muted-foreground">Choose from the options above to preview the menu</p>
-          </CardContent>
-        </Card>
-      )}
+      {/* Show public menu URL if available */}
+
+
+      {/* Render menu preview */}
+      <div className="mt-8">
+        {renderTemplate()}
+          {selectedTemplate && (
+            <Button
+              onClick={handleApplyTemplate}
+              className="mt-2 w-full"
+              variant="default"
+            >
+              Apply This Template
+            </Button>
+          )}
+      </div>
     </div>
   );
 }

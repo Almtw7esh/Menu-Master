@@ -1,3 +1,9 @@
+// Helper to get the full Supabase image URL if needed
+function getMenuItemImageUrl(image: string) {
+  if (!image) return '';
+  if (image.startsWith('http://') || image.startsWith('https://')) return image;
+  return `https://qwwhlsqwcpjygpmbxjxd.supabase.co/storage/v1/object/public/images/${image}`;
+}
 import { Restaurant, Branch, MenuItem } from '@/types';
 import { UtensilsCrossed, MapPin, Truck, Sparkles } from 'lucide-react';
 
@@ -44,55 +50,77 @@ export function ElegantMinimalTemplate({ restaurant, branch, categorizedItems, s
 
       {/* Main Menu Items - Grid with circular images */}
       <div className="px-6 md:px-12 pb-8">
-        {mainCategories.map((category) => (
-          <div key={category} className="mb-10">
-            <h2 className="text-center text-lg font-serif text-stone-600 mb-8 tracking-wider">
-              — {category} —
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {categorizedItems[category].map((item) => (
-                <div key={item.id} className="flex gap-5">
-                  {/* Circular Image Placeholder */}
-                  <div className="w-24 h-24 rounded-full bg-stone-200 flex items-center justify-center flex-shrink-0 overflow-hidden border-4 border-white shadow-lg">
-                    <UtensilsCrossed className="h-10 w-10 text-stone-400" />
+        {mainCategories.map((category) => {
+          const catKey = String(category);
+          console.log('ElegantMinimalTemplate category:', category, 'typeof:', typeof category);
+          return (
+            <div key={catKey} className="mb-10">
+              <h2 className="text-center text-lg font-serif text-stone-600 mb-8 tracking-wider">
+                — {category} —
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {categorizedItems[catKey]?.map((item) => {
+                  console.log('ElegantMinimalTemplate item.id:', item.id, 'typeof:', typeof item.id);
+                  return (
+                    <div key={String(item.id)} className="flex gap-5">
+                    {/* Circular Image Placeholder */}
+                    <div className="w-24 h-24 rounded-full bg-stone-200 flex items-center justify-center flex-shrink-0 overflow-hidden border-4 border-white shadow-lg">
+                      {item.image ? (
+                        <img
+                          src={getMenuItemImageUrl(item.image)}
+                          alt={item.name}
+                          className="h-24 w-24 rounded-full object-cover"
+                          onError={e => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}
+                        />
+                      ) : (
+                        <UtensilsCrossed className="h-10 w-10 text-stone-400" />
+                      )}
+                    </div>
+                    {/* Item Details */}
+                    <div className="flex-1 pt-2">
+                      <h3 className="text-lg font-serif font-semibold text-stone-800">
+                        {item.name}
+                      </h3>
+                      <p className="text-stone-500 text-sm mt-1">
+                        {item.price.toLocaleString()} IQD
+                      </p>
+                      <p className="text-stone-400 text-sm mt-2 leading-relaxed">
+                        {item.description || 'Expertly prepared with the finest ingredients and traditional techniques.'}
+                      </p>
+                    </div>
                   </div>
-                  
-                  {/* Item Details */}
-                  <div className="flex-1 pt-2">
-                    <h3 className="text-lg font-serif font-semibold text-stone-800">
-                      {item.name}
-                    </h3>
-                    <p className="text-stone-500 text-sm mt-1">
-                      {item.price.toLocaleString()} IQD
-                    </p>
-                    <p className="text-stone-400 text-sm mt-2 leading-relaxed">
-                      Expertly prepared with the finest ingredients and traditional techniques.
-                    </p>
-                  </div>
-                </div>
-              ))}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {/* Simple List Categories (Beverages, Desserts) */}
         {simpleCategories.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mt-12 pt-8 border-t border-stone-200">
-            {simpleCategories.map((category) => (
-              <div key={category}>
-                <h3 className="text-xl font-serif font-bold text-stone-800 mb-6">
-                  {category}
-                </h3>
-                <div className="space-y-3">
-                  {categorizedItems[category].map((item) => (
-                    <div key={item.id} className="flex justify-between items-center">
-                      <span className="text-stone-700">{item.name}</span>
-                      <span className="text-stone-500">{item.price.toLocaleString()} IQD</span>
-                    </div>
-                  ))}
+            {simpleCategories.map((category) => {
+              const catKey = String(category);
+              console.log('ElegantMinimalTemplate simple category:', category, 'typeof:', typeof category);
+              return (
+                <div key={catKey}>
+                  <h3 className="text-xl font-serif font-bold text-stone-800 mb-6">
+                    {category}
+                  </h3>
+                  <div className="space-y-3">
+                    {categorizedItems[catKey]?.map((item) => {
+                      console.log('ElegantMinimalTemplate simple item.id:', item.id, 'typeof:', typeof item.id);
+                      return (
+                        <div key={String(item.id)} className="flex justify-between items-center">
+                        <span className="text-stone-700">{item.name}</span>
+                        <span className="text-stone-500">{item.price.toLocaleString()} IQD</span>
+                      </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -104,7 +132,7 @@ export function ElegantMinimalTemplate({ restaurant, branch, categorizedItems, s
           </div>
           <div className="flex items-center gap-2">
             <Truck className="h-4 w-4" />
-            <span>Delivery: {branch?.deliveryPrice?.toLocaleString()} IQD</span>
+            <span>Delivery: {branch?.delivery_price?.toLocaleString()} IQD</span>
           </div>
         </div>
       </div>
